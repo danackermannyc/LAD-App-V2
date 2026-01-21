@@ -70,8 +70,8 @@ LAD App automatically configures Windows power settings, display topology, and p
 ### Option 2: Build from Source
 
 ```bash
-# Clone the repository (replace YOUR_USERNAME with your GitHub username)
-git clone https://github.com/YOUR_USERNAME/lad-app-v2.git
+# Clone the repository 
+git clone https://github.com/danackermannyc/lad-app-v2.git
 cd lad-app-v2
 
 # Build
