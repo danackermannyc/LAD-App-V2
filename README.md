@@ -60,7 +60,7 @@ LAD App automatically configures Windows power settings, display topology, and p
 
 ### Option 1: Download Pre-built Release
 
-1. Go to the [Releases](https://github.com/YOUR_USERNAME/lad-app-v2/releases) page (replace YOUR_USERNAME with your GitHub username)
+1. Go to the [Releases](https://github.com/danackermannyc/lad-app/releases) page
 2. Download the latest `LADApp.zip` or `LADApp.msix`
 3. Extract and run `LADApp.exe` (requires Administrator)
 4. Complete the first-run calibration wizard
