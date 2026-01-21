@@ -9,7 +9,7 @@
 
 ---
 
-## 🎯 What It Does
+## What It Does
 
 LAD App automatically configures Windows power settings, display topology, and peripheral wake capabilities to make a docked laptop behave exactly like a desktop computer. When you connect an external monitor and AC power, the app:
 
@@ -25,7 +25,7 @@ LAD App automatically configures Windows power settings, display topology, and p
 
 ---
 
-## ✨ Features
+## Features
 
 ### Core Functionality
 - **Zero-Touch Wake** - Wake closed laptop with external peripherals
@@ -48,7 +48,7 @@ LAD App automatically configures Windows power settings, display topology, and p
 
 ---
 
-## 📋 Requirements
+## Requirements
 
 - **Windows 10/11** (x64)
 - **.NET 8.0 Runtime** (included in self-contained builds)
@@ -56,7 +56,7 @@ LAD App automatically configures Windows power settings, display topology, and p
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Option 1: Download Pre-built Release
 
@@ -88,7 +88,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 ---
 
-## 📖 Usage
+## Usage
 
 ### First Run
 
@@ -124,7 +124,7 @@ Press `Ctrl+Shift+Alt+D` at any time to:
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 Configuration is stored in: `%LocalAppData%\LADApp\config.json`
 
@@ -137,7 +137,7 @@ Configuration is stored in: `%LocalAppData%\LADApp\config.json`
 
 ---
 
-## 🛠️ Building from Source
+## Building from Source
 
 ### Prerequisites
 
@@ -167,7 +167,7 @@ See [docs/PHASE5_PACKAGING_GUIDE.md](docs/PHASE5_PACKAGING_GUIDE.md) for MSIX pa
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### App won't start
 - **Check:** Running as Administrator? (Required for power settings)
@@ -195,7 +195,7 @@ See [docs/PHASE5_PACKAGING_GUIDE.md](docs/PHASE5_PACKAGING_GUIDE.md) for MSIX pa
 
 ---
 
-## 📝 Known Limitations
+## Known Limitations
 
 - **WMI Fan Speed:** May not be available on all systems (shows "N/A" when unavailable)
 - **Battery Health Guard:** WMI support varies by manufacturer and model
@@ -204,7 +204,7 @@ See [docs/PHASE5_PACKAGING_GUIDE.md](docs/PHASE5_PACKAGING_GUIDE.md) for MSIX pa
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -217,13 +217,13 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [.NET 8.0](https://dotnet.microsoft.com/)
 - Uses Windows Power Management APIs
@@ -231,7 +231,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - [Current Status](docs/CURRENT_STATUS.md) - Detailed project status
 - [Product Requirements](docs/PRD.md) - Original requirements
@@ -241,7 +241,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [ ] Additional manufacturer support for Battery Health Guard
 - [ ] Custom icon design
@@ -251,7 +251,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 This utility modifies Windows power settings and display configuration. While it includes safety features (crash handler, emergency revert), use at your own risk. Always test on a system where you can recover if something goes wrong.
 
@@ -260,13 +260,3 @@ This utility modifies Windows power settings and display configuration. While it
 - Keep the safety hotkey (`Ctrl+Shift+Alt+D`) in mind
 - Have external monitor connected when testing
 
----
-
-## 📞 Support
-
-- **Issues:** [GitHub Issues](https://github.com/YOUR_USERNAME/lad-app-v2/issues) (replace YOUR_USERNAME)
-- **Discussions:** [GitHub Discussions](https://github.com/YOUR_USERNAME/lad-app-v2/discussions) (replace YOUR_USERNAME)
-
----
-
-**Made with ❤️ for the laptop-as-desktop community**
