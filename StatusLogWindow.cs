@@ -33,6 +33,7 @@ namespace LADApp
         {
             InitializeComponent();
             InitializeSessionLog();
+            DpiHelper.ConfigureForm(this);
         }
 
         private void InitializeSessionLog()
@@ -61,41 +62,49 @@ namespace LADApp
 
         private void InitializeComponent()
         {
-            // Modern dark acrylic theme
+            // Modern dark acrylic theme with DPI-aware sizing
             this.Text = "LAD Dashboard";
-            this.Size = new Size(800, 500);
+            this.Size = DpiHelper.Scale(new Size(800, 500));
             this.FormBorderStyle = FormBorderStyle.Sizable;
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.MinimumSize = new Size(600, 400);
+            this.MinimumSize = DpiHelper.Scale(new Size(600, 400));
             this.BackColor = Color.FromArgb(32, 32, 32); // Dark background
             this.ForeColor = Color.White;
 
-            // Main container with padding
-            Panel mainContainer = new Panel
+            // Use TableLayoutPanel for responsive layout
+            TableLayoutPanel mainLayout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(20),
+                ColumnCount = 1,
+                RowCount = 3,
+                Padding = DpiHelper.Scale(new Padding(20)),
                 BackColor = Color.Transparent
             };
+
+            // Configure rows: Title (auto), Cards (fill), Button (auto)
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(50)));
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(50)));
 
             // Title label
             Label titleLabel = new Label
             {
                 Text = "LAD Dashboard",
-                Font = new Font("Segoe UI", 18, FontStyle.Bold),
+                Font = DpiHelper.CreateFont("Segoe UI", 18, FontStyle.Bold),
                 ForeColor = Color.White,
                 AutoSize = true,
-                Location = new Point(20, 20)
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
-            // Status cards container
+            // Status cards container using FlowLayoutPanel for wrapping
             FlowLayoutPanel cardsContainer = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = true,
-                Padding = new Padding(0, 50, 0, 0),
-                AutoSize = false
+                AutoSize = false,
+                AutoScroll = true
             };
 
             // System Status Card
@@ -103,12 +112,13 @@ namespace LADApp
             systemStatusLabel = new Label
             {
                 Text = SystemStatus,
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 ForeColor = Color.LightGray,
                 AutoSize = false,
-                Location = new Point(15, 60),
-                Size = new Size(190, 110),
-                TextAlign = ContentAlignment.TopLeft
+                Dock = DockStyle.Fill,
+                Padding = DpiHelper.Scale(new Padding(15, 60, 15, 15)),
+                TextAlign = ContentAlignment.TopLeft,
+                BackColor = Color.Transparent
             };
             systemCard.Controls.Add(systemStatusLabel);
 
@@ -117,12 +127,13 @@ namespace LADApp
             healthStatusLabel = new Label
             {
                 Text = HealthStatus,
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 ForeColor = Color.LightGray,
                 AutoSize = false,
-                Location = new Point(15, 60),
-                Size = new Size(190, 110),
-                TextAlign = ContentAlignment.TopLeft
+                Dock = DockStyle.Fill,
+                Padding = DpiHelper.Scale(new Padding(15, 60, 15, 15)),
+                TextAlign = ContentAlignment.TopLeft,
+                BackColor = Color.Transparent
             };
             healthCard.Controls.Add(healthStatusLabel);
 
@@ -131,12 +142,13 @@ namespace LADApp
             peripheralsStatusLabel = new Label
             {
                 Text = PeripheralsStatus,
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 ForeColor = Color.LightGray,
                 AutoSize = false,
-                Location = new Point(15, 60),
-                Size = new Size(190, 110),
-                TextAlign = ContentAlignment.TopLeft
+                Dock = DockStyle.Fill,
+                Padding = DpiHelper.Scale(new Padding(15, 60, 15, 15)),
+                TextAlign = ContentAlignment.TopLeft,
+                BackColor = Color.Transparent
             };
             peripheralsCard.Controls.Add(peripheralsStatusLabel);
 
@@ -145,27 +157,35 @@ namespace LADApp
             cardsContainer.Controls.Add(healthCard);
             cardsContainer.Controls.Add(peripheralsCard);
 
-            // View Log button (bottom)
+            // View Log button container
+            Panel buttonPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent
+            };
+
             viewLogButton = new Button
             {
                 Text = "View Log",
-                Size = new Size(120, 35),
-                Location = new Point(20, 0),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+                Size = DpiHelper.Scale(new Size(120, 35)),
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
                 BackColor = Color.FromArgb(64, 64, 64),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9)
+                Font = DpiHelper.CreateFont("Segoe UI", 9)
             };
             viewLogButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
             viewLogButton.FlatAppearance.BorderSize = 1;
             viewLogButton.Click += ViewLogButton_Click;
 
-            // Layout
-            mainContainer.Controls.Add(titleLabel);
-            mainContainer.Controls.Add(cardsContainer);
-            mainContainer.Controls.Add(viewLogButton);
-            this.Controls.Add(mainContainer);
+            buttonPanel.Controls.Add(viewLogButton);
+
+            // Add controls to main layout
+            mainLayout.Controls.Add(titleLabel, 0, 0);
+            mainLayout.Controls.Add(cardsContainer, 0, 1);
+            mainLayout.Controls.Add(buttonPanel, 0, 2);
+
+            this.Controls.Add(mainLayout);
 
             // Update status display
             UpdateStatusDisplay();
@@ -175,62 +195,49 @@ namespace LADApp
         {
             Panel card = new Panel
             {
-                Size = new Size(220, 180),
-                Margin = new Padding(10),
+                Size = DpiHelper.Scale(new Size(220, 180)),
+                Margin = DpiHelper.Scale(new Padding(10)),
                 BackColor = Color.FromArgb(45, 45, 45), // Slightly lighter dark
-                Padding = new Padding(15)
+                Padding = DpiHelper.Scale(new Padding(15)),
+                BorderStyle = BorderStyle.FixedSingle // Simple border instead of rounded corners
             };
 
-            // Rounded corners effect (using Paint event)
-            card.Paint += (s, e) =>
+            // Card header using TableLayoutPanel for proper positioning
+            TableLayoutPanel headerLayout = new TableLayoutPanel
             {
-                Graphics g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                
-                using (GraphicsPath path = new GraphicsPath())
-                {
-                    int radius = 12;
-                    Rectangle rect = card.ClientRectangle;
-                    rect.Width--;
-                    rect.Height--;
-                    
-                    path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
-                    path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
-                    path.AddArc(rect.Right - radius * 2, rect.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
-                    path.AddArc(rect.X, rect.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
-                    path.CloseAllFigures();
-                    
-                    card.Region = new Region(path);
-                }
-                
-                // Draw border
-                using (Pen pen = new Pen(Color.FromArgb(80, 80, 80), 1))
-                {
-                    g.DrawPath(pen, new GraphicsPath());
-                }
+                Dock = DockStyle.Top,
+                ColumnCount = 1,
+                RowCount = 2,
+                AutoSize = true,
+                BackColor = Color.Transparent
             };
 
-            // Card header
+            headerLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            headerLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
             Label titleLabel = new Label
             {
                 Text = title,
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                Font = DpiHelper.CreateFont("Segoe UI", 12, FontStyle.Bold),
                 ForeColor = Color.White,
                 AutoSize = true,
-                Location = new Point(15, 15)
+                Padding = new Padding(0),
+                BackColor = Color.Transparent
             };
 
             Label subtitleLabel = new Label
             {
                 Text = subtitle,
-                Font = new Font("Segoe UI", 8),
+                Font = DpiHelper.CreateFont("Segoe UI", 8),
                 ForeColor = Color.Gray,
                 AutoSize = true,
-                Location = new Point(15, 38)
+                Padding = DpiHelper.Scale(new Padding(0, 3, 0, 0)),
+                BackColor = Color.Transparent
             };
 
-            card.Controls.Add(titleLabel);
-            card.Controls.Add(subtitleLabel);
+            headerLayout.Controls.Add(titleLabel, 0, 0);
+            headerLayout.Controls.Add(subtitleLabel, 0, 1);
+            card.Controls.Add(headerLayout);
 
             return card;
         }
@@ -291,45 +298,51 @@ namespace LADApp
                     ReadOnly = true,
                     ScrollBars = ScrollBars.Vertical,
                     Dock = DockStyle.Fill,
-                    Font = new Font("Consolas", 9),
+                    Font = DpiHelper.CreateFont("Consolas", 9),
                     BackColor = Color.FromArgb(20, 20, 20),
-                    ForeColor = Color.LimeGreen,
-                    Margin = new Padding(20)
+                    ForeColor = Color.LimeGreen
                 };
 
-                Panel logPanel = new Panel
+                // Use TableLayoutPanel for log panel layout
+                TableLayoutPanel logLayout = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
-                    Padding = new Padding(20),
-                    BackColor = Color.FromArgb(32, 32, 32)
+                    ColumnCount = 1,
+                    RowCount = 2,
+                    BackColor = Color.FromArgb(32, 32, 32),
+                    Padding = DpiHelper.Scale(new Padding(20))
                 };
-                logPanel.Controls.Add(logTextBox);
+
+                logLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                logLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(50)));
 
                 // Add close button
                 Button closeLogButton = new Button
                 {
                     Text = "Close Log",
-                    Size = new Size(120, 35),
+                    Size = DpiHelper.Scale(new Size(120, 35)),
                     Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
                     BackColor = Color.FromArgb(64, 64, 64),
                     ForeColor = Color.White,
                     FlatStyle = FlatStyle.Flat,
-                    Font = new Font("Segoe UI", 9)
+                    Font = DpiHelper.CreateFont("Segoe UI", 9)
                 };
                 closeLogButton.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
                 closeLogButton.FlatAppearance.BorderSize = 1;
                 closeLogButton.Click += (s, e) =>
                 {
-                    logPanel.Visible = false;
-                    logPanel.Dispose();
+                    logLayout.Visible = false;
+                    logLayout.Dispose();
                     logTextBox = null;
                     logVisible = false;
                     viewLogButton.Text = "View Log";
                 };
 
-                logPanel.Controls.Add(closeLogButton);
-                this.Controls.Add(logPanel);
-                logPanel.BringToFront();
+                logLayout.Controls.Add(logTextBox, 0, 0);
+                logLayout.Controls.Add(closeLogButton, 0, 1);
+
+                this.Controls.Add(logLayout);
+                logLayout.BringToFront();
                 logVisible = true;
                 viewLogButton.Text = "Hide Log";
             }

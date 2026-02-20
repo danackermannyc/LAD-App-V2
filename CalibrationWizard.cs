@@ -45,77 +45,121 @@ namespace LADApp
             this.peripheralWakeManager = peripheralWakeManager;
             this.appConfig = appConfig;
             InitializeComponent();
+            DpiHelper.ConfigureForm(this);
             LoadStep(1);
         }
 
         private void InitializeComponent()
         {
             this.Text = "LAD App - First Run Calibration Wizard";
-            this.Size = new Size(700, 500);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.Size = DpiHelper.Scale(new Size(700, 500));
+            this.FormBorderStyle = FormBorderStyle.Sizable; // Changed from FixedDialog to allow DPI scaling
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.MinimumSize = DpiHelper.Scale(new Size(600, 450));
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.ShowInTaskbar = true;
 
-            // Title label
+            // Use TableLayoutPanel for wizard layout
+            TableLayoutPanel mainLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                Padding = DpiHelper.Scale(new Padding(20)),
+                BackColor = Color.Transparent
+            };
+
+            // Configure rows: Header (auto), Content (fill), Buttons (auto)
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(80)));
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, DpiHelper.Scale(50)));
+
+            // Header panel for title and description
+            Panel headerPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent
+            };
+
             titleLabel = new Label
             {
                 Text = "Welcome to LAD App",
-                Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                Font = DpiHelper.CreateFont("Segoe UI", 16, FontStyle.Bold),
                 AutoSize = true,
-                Location = new Point(20, 20)
+                Location = new Point(0, 0)
             };
 
-            // Description label
             descriptionLabel = new Label
             {
                 Text = "This wizard will help you configure LAD App for your setup.",
-                Font = new Font("Segoe UI", 10),
+                Font = DpiHelper.CreateFont("Segoe UI", 10),
                 AutoSize = true,
-                Location = new Point(20, 60)
+                Location = DpiHelper.Scale(new Point(0, 40))
             };
+
+            headerPanel.Controls.Add(titleLabel);
+            headerPanel.Controls.Add(descriptionLabel);
 
             // Content panel (where step-specific content goes)
             contentPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(20, 100, 20, 60)
+                AutoScroll = true,
+                BackColor = Color.Transparent
             };
 
-            // Buttons
+            // Button panel using TableLayoutPanel for responsive button layout
+            TableLayoutPanel buttonPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                BackColor = Color.Transparent
+            };
+
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
+
+            cancelButton = new Button
+            {
+                Text = "Cancel",
+                Size = DpiHelper.Scale(new Size(100, 30)),
+                Anchor = AnchorStyles.Left,
+                Font = DpiHelper.CreateFont("Segoe UI", 9)
+            };
+            cancelButton.Click += CancelButton_Click;
+
             backButton = new Button
             {
                 Text = "< Back",
-                Size = new Size(100, 30),
-                Location = new Point(420, 420),
-                Enabled = false
+                Size = DpiHelper.Scale(new Size(100, 30)),
+                Anchor = AnchorStyles.Right,
+                Enabled = false,
+                Font = DpiHelper.CreateFont("Segoe UI", 9)
             };
             backButton.Click += BackButton_Click;
 
             nextButton = new Button
             {
                 Text = "Next >",
-                Size = new Size(100, 30),
-                Location = new Point(530, 420)
+                Size = DpiHelper.Scale(new Size(100, 30)),
+                Anchor = AnchorStyles.Right,
+                Font = DpiHelper.CreateFont("Segoe UI", 9)
             };
             nextButton.Click += NextButton_Click;
 
-            cancelButton = new Button
-            {
-                Text = "Cancel",
-                Size = new Size(100, 30),
-                Location = new Point(20, 420)
-            };
-            cancelButton.Click += CancelButton_Click;
+            buttonPanel.Controls.Add(cancelButton, 0, 0);
+            buttonPanel.Controls.Add(backButton, 1, 0);
+            buttonPanel.Controls.Add(nextButton, 2, 0);
 
-            // Add controls
-            this.Controls.Add(titleLabel);
-            this.Controls.Add(descriptionLabel);
-            this.Controls.Add(contentPanel);
-            this.Controls.Add(backButton);
-            this.Controls.Add(nextButton);
-            this.Controls.Add(cancelButton);
+            // Add panels to main layout
+            mainLayout.Controls.Add(headerPanel, 0, 0);
+            mainLayout.Controls.Add(contentPanel, 0, 1);
+            mainLayout.Controls.Add(buttonPanel, 0, 2);
+
+            this.Controls.Add(mainLayout);
         }
 
         private void LoadStep(int step)
@@ -147,18 +191,29 @@ namespace LADApp
             titleLabel.Text = "Welcome to LAD App";
             descriptionLabel.Text = "This wizard will help you configure LAD App for your setup.";
 
+            // Use FlowLayoutPanel for vertical stacking
+            FlowLayoutPanel flowPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                Padding = DpiHelper.Scale(new Padding(20))
+            };
+
             // Check admin status
             bool isAdmin = IsRunningAsAdministrator();
-            
+
             adminStatusLabel = new Label
             {
-                Text = isAdmin 
-                    ? "✓ Running with Administrator privileges" 
+                Text = isAdmin
+                    ? "✓ Running with Administrator privileges"
                     : "⚠ Not running as Administrator - some features may not work",
-                Font = new Font("Segoe UI", 10),
+                Font = DpiHelper.CreateFont("Segoe UI", 10),
                 ForeColor = isAdmin ? Color.Green : Color.Orange,
                 AutoSize = true,
-                Location = new Point(20, 20)
+                MaximumSize = new Size(contentPanel.Width - DpiHelper.Scale(80), 0),
+                Margin = DpiHelper.Scale(new Padding(0, 0, 0, 20))
             };
 
             Label infoLabel = new Label
@@ -168,13 +223,15 @@ namespace LADApp
                        "• Enable wake from USB/Bluetooth devices\n" +
                        "• Control display topology\n\n" +
                        "If you're not running as Administrator, please restart the app with elevated privileges.",
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 AutoSize = true,
-                Location = new Point(20, 60)
+                MaximumSize = new Size(contentPanel.Width - DpiHelper.Scale(80), 0)
             };
 
-            contentPanel.Controls.Add(adminStatusLabel);
-            contentPanel.Controls.Add(infoLabel);
+            flowPanel.Controls.Add(adminStatusLabel);
+            flowPanel.Controls.Add(infoLabel);
+
+            contentPanel.Controls.Add(flowPanel);
         }
 
 
@@ -182,6 +239,16 @@ namespace LADApp
         {
             titleLabel.Text = "Test Wake Functionality";
             descriptionLabel.Text = "Verify that your keyboard and mouse can wake the system from sleep.";
+
+            // Use FlowLayoutPanel for vertical stacking with proper spacing
+            FlowLayoutPanel flowPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                Padding = DpiHelper.Scale(new Padding(20))
+            };
 
             wakeTestLabel = new Label
             {
@@ -193,32 +260,36 @@ namespace LADApp
                        "before starting the test, as you'll need to see the screen to verify wake worked.\n\n" +
                        "Note: LAD App automatically enables wake for all HID devices. You don't need to\n" +
                        "select specific devices - it works with any keyboard or mouse you connect.",
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 AutoSize = true,
-                Location = new Point(20, 20)
+                MaximumSize = new Size(contentPanel.Width - DpiHelper.Scale(80), 0),
+                Margin = DpiHelper.Scale(new Padding(0, 0, 0, 20))
             };
 
             testWakeButton = new Button
             {
                 Text = "Start Wake Test",
-                Size = new Size(200, 40),
-                Location = new Point(20, 150),
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Size = DpiHelper.Scale(new Size(200, 40)),
+                Margin = DpiHelper.Scale(new Padding(0, 10, 0, 10)),
+                Font = DpiHelper.CreateFont("Segoe UI", 10, FontStyle.Bold)
             };
             testWakeButton.Click += TestWakeButton_Click;
 
             wakeTestStatusLabel = new Label
             {
                 Text = "",
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 AutoSize = true,
-                Location = new Point(20, 210),
-                ForeColor = Color.Blue
+                MaximumSize = new Size(contentPanel.Width - DpiHelper.Scale(80), 0),
+                ForeColor = Color.Blue,
+                Margin = DpiHelper.Scale(new Padding(0, 10, 0, 0))
             };
 
-            contentPanel.Controls.Add(wakeTestLabel);
-            contentPanel.Controls.Add(testWakeButton);
-            contentPanel.Controls.Add(wakeTestStatusLabel);
+            flowPanel.Controls.Add(wakeTestLabel);
+            flowPanel.Controls.Add(testWakeButton);
+            flowPanel.Controls.Add(wakeTestStatusLabel);
+
+            contentPanel.Controls.Add(flowPanel);
 
             // If wake test already completed, show status
             if (wakeTestCompleted)
@@ -234,6 +305,16 @@ namespace LADApp
             titleLabel.Text = "Calibration Complete!";
             descriptionLabel.Text = "Your LAD App is now configured and ready to use.";
 
+            // Use FlowLayoutPanel for vertical stacking
+            FlowLayoutPanel flowPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                Padding = DpiHelper.Scale(new Padding(20))
+            };
+
             completionLabel = new Label
             {
                 Text = "Configuration Summary:\n\n" +
@@ -246,12 +327,13 @@ namespace LADApp
                        "Note: LAD App enables wake for all HID devices automatically.\n" +
                        "If you need to configure specific devices, use Windows Device Manager.\n\n" +
                        "You can access the Status Log from the system tray icon.",
-                Font = new Font("Segoe UI", 9),
+                Font = DpiHelper.CreateFont("Segoe UI", 9),
                 AutoSize = true,
-                Location = new Point(20, 20)
+                MaximumSize = new Size(contentPanel.Width - DpiHelper.Scale(80), 0)
             };
 
-            contentPanel.Controls.Add(completionLabel);
+            flowPanel.Controls.Add(completionLabel);
+            contentPanel.Controls.Add(flowPanel);
         }
 
 

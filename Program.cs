@@ -22,9 +22,12 @@ namespace LADApp
 
             try
             {
+                // Configure DPI awareness for high-DPI displays
+                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                
+
                 mainFormInstance = new MainForm();
                 Application.Run(mainFormInstance);
             }

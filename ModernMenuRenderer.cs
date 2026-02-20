@@ -22,9 +22,11 @@ namespace LADApp
         {
             if (e.Item.Selected)
             {
-                // Draw rounded hover effect
-                Rectangle rect = new Rectangle(2, 0, e.Item.Width - 4, e.Item.Height);
-                using (GraphicsPath path = GetRoundedRectangle(rect, 4))
+                // Draw rounded hover effect with DPI-aware insets and radius
+                int inset = DpiHelper.Scale(2);
+                int radius = DpiHelper.Scale(4);
+                Rectangle rect = new Rectangle(inset, 0, e.Item.Width - (inset * 2), e.Item.Height);
+                using (GraphicsPath path = GetRoundedRectangle(rect, radius))
                 using (SolidBrush brush = new SolidBrush(HoverBackColor))
                 {
                     e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -40,10 +42,11 @@ namespace LADApp
         protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
         {
             Rectangle rect = new Rectangle(0, 0, e.Item.Width, e.Item.Height);
+            int margin = DpiHelper.Scale(10);
             using (Pen pen = new Pen(SeparatorColor, 1))
             {
-                e.Graphics.DrawLine(pen, rect.Left + 10, rect.Top + rect.Height / 2, 
-                    rect.Right - 10, rect.Top + rect.Height / 2);
+                e.Graphics.DrawLine(pen, rect.Left + margin, rect.Top + rect.Height / 2,
+                    rect.Right - margin, rect.Top + rect.Height / 2);
             }
         }
 

@@ -268,9 +268,8 @@ namespace LADApp
             // Initial battery status update
             UpdateBatteryStatus();
 
-            // Set power request to prevent sleep and keep app running
-            // This helps bypass Bonjour/LSA security hangs
-            SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED);
+            // NOTE: Removed SetThreadExecutionState call that was preventing sleep
+            // Windows will manage sleep normally. LAD App's job is to manage lid policy, not prevent sleep.
 
             // Initial status check and log entry
             string startTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
@@ -409,9 +408,10 @@ namespace LADApp
 
         private void HeartbeatTimer_Tick(object? sender, EventArgs e)
         {
-            // Send power request heartbeat to prevent Bonjour/LSA security hangs
-            SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED);
-            LogToStatusWindow("Heartbeat: Power Request Sent");
+            // NOTE: Removed SetThreadExecutionState call that was preventing sleep every 5 seconds
+            // This was causing the laptop to never sleep, keeping fans running overnight
+            // Windows will manage sleep normally.
+            LogToStatusWindow("Heartbeat: Status OK");
         }
 
         // Performance tracking for CPU usage calculation
@@ -1691,7 +1691,7 @@ namespace LADApp
             }
             catch { /* Ignore - continue with other reverts */ }
 
-            // 7. Clear power request to allow normal sleep behavior
+            // 7. Clear power request (no longer needed since we don't set it, but kept for safety)
             try
             {
                 SetThreadExecutionState(ES_CONTINUOUS);
@@ -1711,7 +1711,7 @@ namespace LADApp
             }
             catch { /* Ignore */ }
 
-            // Clear power request to allow normal sleep behavior
+            // Clear power request (no longer needed since we don't set it, but kept for safety)
             SetThreadExecutionState(ES_CONTINUOUS);
 
             // Revert power settings before closing
