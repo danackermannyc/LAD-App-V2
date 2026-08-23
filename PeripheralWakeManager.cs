@@ -129,6 +129,7 @@ namespace LADApp
         private const uint FILE_SHARE_WRITE = 0x00000002;
         private const uint OPEN_EXISTING = 3;
         private const uint DEVICEPOWER_SET_WAKEENABLED = 0x00000001;
+        private const uint DEVICEPOWER_CLEAR_WAKEENABLED = 0x00000002;
         private const uint ERROR_SUCCESS = 0;
         
         // Device Registry Property constants
@@ -158,6 +159,36 @@ namespace LADApp
         private const ushort HID_USAGE_MOUSE = 0x02;
 
         // Device information class for wizard selection
+        /// <summary>
+        /// Result of arming devices for wake: the friendly names (for display) alongside
+        /// the identifiers that actually worked (for disarming later).
+        /// The two lists are kept in step so that index N of each refers to one device.
+        /// </summary>
+        public class WakeArmResult
+        {
+            /// <summary>Human-readable device names, for logging and the dashboard.</summary>
+            public List<string> DeviceNames { get; } = new List<string>();
+
+            /// <summary>
+            /// The exact string DevicePowerSetDeviceState accepted for each device.
+            /// Persisted to config so a later session can disarm precisely these devices.
+            /// </summary>
+            public List<string> DeviceIdentifiers { get; } = new List<string>();
+
+            public int Count => DeviceNames.Count;
+
+            public void Add(string deviceName, string? identifier)
+            {
+                if (string.IsNullOrWhiteSpace(identifier) || DeviceIdentifiers.Contains(identifier))
+                {
+                    return;
+                }
+
+                DeviceNames.Add(deviceName);
+                DeviceIdentifiers.Add(identifier);
+            }
+        }
+
         public class DeviceInfo
         {
             public string Name { get; set; } = string.Empty;
@@ -209,10 +240,10 @@ namespace LADApp
         /// Enables wake capability for all connected keyboards and mice.
         /// </summary>
         /// <returns>List of device names that were successfully enabled</returns>
-        public List<string> EnableWakeForKeyboardsAndMice(Action<string>? logCallback = null)
+        public WakeArmResult EnableWakeForKeyboardsAndMice(Action<string>? logCallback = null)
         {
-            List<string> enabledDevices = new List<string>();
-            
+            WakeArmResult enabledDevices = new WakeArmResult();
+
             try
             {
                 // Get HID GUID
@@ -346,7 +377,7 @@ namespace LADApp
                                                                 if (result == ERROR_SUCCESS)
                                                                 {
                                                                     wakeEnabled = true;
-                                                                    enabledDevices.Add(deviceName);
+                                                                    enabledDevices.Add(deviceName, deviceInstancePath);
                                                                     logCallback?.Invoke($"PERIPHERAL: Enabled wake for {deviceName} (Instance Path: {deviceInstancePath})");
                                                                 }
                                                                 else
@@ -367,7 +398,7 @@ namespace LADApp
                                                                 if (result == ERROR_SUCCESS)
                                                                 {
                                                                     wakeEnabled = true;
-                                                                    enabledDevices.Add(deviceName);
+                                                                    enabledDevices.Add(deviceName, windowsDeviceDescription);
                                                                     logCallback?.Invoke($"PERIPHERAL: Enabled wake for {deviceName} using Device Description fallback (Windows: {windowsDeviceDescription})");
                                                                 }
                                                                 else
@@ -387,10 +418,7 @@ namespace LADApp
                                                                 if (result == ERROR_SUCCESS)
                                                                 {
                                                                     wakeEnabled = true;
-                                                                    if (!enabledDevices.Contains(deviceName))
-                                                                    {
-                                                                        enabledDevices.Add(deviceName);
-                                                                    }
+                                                                    enabledDevices.Add(deviceName, deviceName);
                                                                     logCallback?.Invoke($"PERIPHERAL: Enabled wake for {deviceName} using device name fallback");
                                                                 }
                                                                 else
@@ -428,6 +456,62 @@ namespace LADApp
             }
 
             return enabledDevices;
+        }
+
+        /// <summary>
+        /// Clears the wake-from-sleep capability for the devices previously armed by
+        /// <see cref="EnableWakeForKeyboardsAndMice"/>.
+        ///
+        /// This is the counterpart to arming, and exists so that an undocked laptop does
+        /// not stay wakeable by a jostled Bluetooth mouse in a bag. It deliberately acts
+        /// only on the identifiers we recorded when arming rather than on every HID device
+        /// present, so wake settings the user configured themselves are left alone.
+        /// </summary>
+        /// <param name="deviceIdentifiers">Identifiers recorded by <see cref="WakeArmResult.DeviceIdentifiers"/>.</param>
+        /// <param name="logCallback">Optional logger; pass null during crash handling.</param>
+        /// <returns>The number of devices successfully disarmed.</returns>
+        public int DisableWakeForDevices(IEnumerable<string>? deviceIdentifiers, Action<string>? logCallback = null)
+        {
+            if (deviceIdentifiers == null)
+            {
+                return 0;
+            }
+
+            int disarmedCount = 0;
+
+            foreach (string identifier in deviceIdentifiers)
+            {
+                if (string.IsNullOrWhiteSpace(identifier))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    uint result = DevicePowerSetDeviceState(
+                        identifier,
+                        DEVICEPOWER_CLEAR_WAKEENABLED,
+                        IntPtr.Zero);
+
+                    if (result == ERROR_SUCCESS)
+                    {
+                        disarmedCount++;
+                        logCallback?.Invoke($"PERIPHERAL: Disabled wake for {identifier}");
+                    }
+                    else
+                    {
+                        // A device that has since been unplugged cannot be disarmed and
+                        // also cannot wake the machine, so this is not treated as failure.
+                        logCallback?.Invoke($"PERIPHERAL: Could not disable wake for {identifier} (Error: {result}, Win32: {Marshal.GetLastWin32Error()}) - device may be disconnected");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logCallback?.Invoke($"PERIPHERAL: Exception disabling wake for {identifier} - {ex.Message}");
+                }
+            }
+
+            return disarmedCount;
         }
 
         /// <summary>

@@ -179,6 +179,18 @@ namespace LADApp
                 }
             }
 
+            // Startup recovery: if the last session set policy and never cleared the flag,
+            // it died without reverting (killed, power loss, BSOD) and the machine is still
+            // in LAD state with nothing managing it. Restore known-good defaults now. If we
+            // are genuinely still docked, the detection timer re-applies policy moments later.
+            if (appConfig.PolicyActive)
+            {
+                LogToStatusWindow("RECOVERY: Previous session ended without reverting - restoring system defaults");
+                StatusLogWindow.WriteDirectToSessionLog("RECOVERY: Previous session ended without reverting - restoring system defaults");
+                RevertAll(RevertReason.StartupRecovery, LogDurable);
+                lastLADReadyState = false;
+            }
+
             // Create the tray icon
             trayIcon = new NotifyIcon();
             UpdateTrayIcon(false); // Initial state
@@ -351,7 +363,7 @@ namespace LADApp
                         
                         // Enable wake for all devices (app does this automatically, but ensure it's done)
                         LogToStatusWindow("PERIPHERAL: Enabling wake for all keyboards and mice");
-                        peripheralWakeManager.EnableWakeForKeyboardsAndMice(LogToStatusWindow);
+                        ArmPeripheralWake();
                     }
                     else
                     {
@@ -841,7 +853,22 @@ namespace LADApp
                 {
                     LogToStatusWindow($"POLICY APPLY: Starting LAD Ready policy application at {timestamp}");
                     StatusLogWindow.WriteDirectToSessionLog($"POLICY APPLY: Starting LAD Ready policy application at {timestamp}");
-                    
+
+                    // Mark the system as modified BEFORE touching anything. If we are killed
+                    // between here and the revert, the next launch sees this flag and cleans
+                    // up. Writing it after the changes would leave a window where the machine
+                    // is modified but nothing on disk says so.
+                    if (!appConfig.PolicyActive)
+                    {
+                        appConfig.PolicyActive = true;
+                        if (!appConfig.Save())
+                        {
+                            LogToStatusWindow("POLICY APPLY: WARNING - could not persist active-policy flag; crash recovery may not run");
+                            StatusLogWindow.WriteDirectToSessionLog("POLICY APPLY: WARNING - could not persist active-policy flag; crash recovery may not run");
+                        }
+                    }
+
+
                     // Set Lid Close Action to "Do Nothing"
                     try
                     {
@@ -976,13 +1003,13 @@ namespace LADApp
                         DateTime wakeEnableStart = DateTime.Now;
                         LogToStatusWindow("PERIPHERAL: Enabling wake for keyboards and mice...");
                         StatusLogWindow.WriteDirectToSessionLog("PERIPHERAL: Enabling wake for keyboards and mice...");
-                        var enabledDevices = peripheralWakeManager.EnableWakeForKeyboardsAndMice(LogToStatusWindow);
+                        int armedCount = ArmPeripheralWake();
                         TimeSpan wakeEnableDuration = DateTime.Now - wakeEnableStart;
-                        
-                        if (enabledDevices.Count > 0)
+
+                        if (armedCount > 0)
                         {
-                            LogToStatusWindow($"PERIPHERAL: Successfully enabled wake for {enabledDevices.Count} device(s) (took {wakeEnableDuration.TotalMilliseconds:F0}ms)");
-                            StatusLogWindow.WriteDirectToSessionLog($"PERIPHERAL: Successfully enabled wake for {enabledDevices.Count} device(s) (took {wakeEnableDuration.TotalMilliseconds:F0}ms)");
+                            LogToStatusWindow($"PERIPHERAL: Successfully enabled wake for {armedCount} device(s) (took {wakeEnableDuration.TotalMilliseconds:F0}ms)");
+                            StatusLogWindow.WriteDirectToSessionLog($"PERIPHERAL: Successfully enabled wake for {armedCount} device(s) (took {wakeEnableDuration.TotalMilliseconds:F0}ms)");
                         }
                         else
                         {
@@ -1049,140 +1076,8 @@ namespace LADApp
                 }
                 else
                 {
-                    // Revert Lid Close Action to "Sleep"
-                    try
-                    {
-                        success = powerManager.SetLidCloseSleep();
-                        if (success)
-                        {
-                            LogToStatusWindow("Power Policy: Lid Close Action reverted to 'Sleep'");
-                        }
-                        else
-                        {
-                            LogToStatusWindow("Power Policy: Failed to revert Lid Close Action to 'Sleep' (may require Administrator)");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogToStatusWindow($"Power Policy: Exception reverting Lid Close Action - {ex.Message}");
-                    }
-
-                    // Restore original Hibernate Timeout
-                    try
-                    {
-                        DateTime hibernateTimeoutStart = DateTime.Now;
-                        success = powerManager.RestoreHibernateTimeout();
-                        TimeSpan hibernateTimeoutDuration = DateTime.Now - hibernateTimeoutStart;
-                        
-                        if (success)
-                        {
-                            uint? restoredValue = powerManager.GetOriginalHibernateTimeout();
-                            string restoredValueStr = restoredValue.HasValue ? $"{restoredValue.Value} seconds" : "Unknown";
-                            LogToStatusWindow($"Power Policy: Hibernate Timeout restored to '{restoredValueStr}' (took {hibernateTimeoutDuration.TotalMilliseconds:F0}ms)");
-                            StatusLogWindow.WriteDirectToSessionLog($"Power Policy: Hibernate Timeout restored to '{restoredValueStr}' (took {hibernateTimeoutDuration.TotalMilliseconds:F0}ms)");
-                        }
-                        else
-                        {
-                            LogToStatusWindow("Power Policy: Failed to restore Hibernate Timeout (may require Administrator or setting unavailable)");
-                            StatusLogWindow.WriteDirectToSessionLog("Power Policy: FAILED to restore Hibernate Timeout (may require Administrator or setting unavailable)");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogToStatusWindow($"Power Policy: Exception restoring Hibernate Timeout - {ex.Message}");
-                        StatusLogWindow.WriteDirectToSessionLog($"Power Policy: EXCEPTION restoring Hibernate Timeout - {ex.Message}");
-                    }
-
-                    // Restore original power scheme
-                    try
-                    {
-                        DateTime powerSchemeStart = DateTime.Now;
-                        success = powerManager.RestoreOriginalPowerScheme();
-                        TimeSpan powerSchemeDuration = DateTime.Now - powerSchemeStart;
-                        
-                        if (success)
-                        {
-                            Guid? restoredScheme = powerManager.GetOriginalPowerScheme();
-                            string restoredSchemeStr = restoredScheme.HasValue ? restoredScheme.Value.ToString() : "Unknown";
-                            LogToStatusWindow($"POWER: Restored original power scheme '{restoredSchemeStr}' (took {powerSchemeDuration.TotalMilliseconds:F0}ms)");
-                            StatusLogWindow.WriteDirectToSessionLog($"POWER: Restored original power scheme '{restoredSchemeStr}' (took {powerSchemeDuration.TotalMilliseconds:F0}ms)");
-                        }
-                        else
-                        {
-                            LogToStatusWindow("POWER: Failed to restore original power scheme (may require Administrator)");
-                            StatusLogWindow.WriteDirectToSessionLog("POWER: FAILED to restore original power scheme (may require Administrator)");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogToStatusWindow($"POWER: Exception restoring original power scheme - {ex.Message}");
-                        StatusLogWindow.WriteDirectToSessionLog($"POWER: EXCEPTION restoring original power scheme - {ex.Message}");
-                    }
-
-                    // Disable Battery Health Guard (restore to 100%) if enabled
-                    if (appConfig.BatteryHealthGuardEnabled)
-                    {
-                        try
-                        {
-                            DateTime batteryGuardStart = DateTime.Now;
-                            bool batteryGuardSuccess = false;
-                            
-                            if (batteryHealthManager.IsWmiSupportAvailable())
-                            {
-                                batteryGuardSuccess = batteryHealthManager.DisableChargeLimit();
-                                TimeSpan batteryGuardDuration = DateTime.Now - batteryGuardStart;
-                                
-                                if (batteryGuardSuccess)
-                                {
-                                    LogToStatusWindow($"BATTERY: Charge limit disabled - restored to 100% (took {batteryGuardDuration.TotalMilliseconds:F0}ms)");
-                                    StatusLogWindow.WriteDirectToSessionLog($"BATTERY: Charge limit disabled - restored to 100% (took {batteryGuardDuration.TotalMilliseconds:F0}ms)");
-                                }
-                                else
-                                {
-                                    LogToStatusWindow("BATTERY: Failed to disable charge limit (may require Administrator)");
-                                    StatusLogWindow.WriteDirectToSessionLog("BATTERY: FAILED to disable charge limit (may require Administrator)");
-                                }
-                            }
-                            else
-                            {
-                                LogToStatusWindow("BATTERY: Battery Health Guard disabled - Please manually restore in manufacturer app");
-                                StatusLogWindow.WriteDirectToSessionLog("BATTERY: Battery Health Guard disabled - Manual restoration required");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogToStatusWindow($"BATTERY: Exception disabling charge limit - {ex.Message}");
-                            StatusLogWindow.WriteDirectToSessionLog($"BATTERY: EXCEPTION disabling charge limit - {ex.Message}");
-                        }
-                    }
-
-                    // Re-enable USB Selective Suspend (restore default)
-                    try
-                    {
-                        success = peripheralWakeManager.EnableUsbSelectiveSuspend(LogToStatusWindow);
-                        if (!success)
-                        {
-                            LogToStatusWindow("PERIPHERAL: Failed to re-enable USB Selective Suspend (may require Administrator)");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogToStatusWindow($"PERIPHERAL: Exception re-enabling USB Selective Suspend - {ex.Message}");
-                    }
-
-                    // Restore Extended display topology (restore internal screen)
-                    try
-                    {
-                        success = displayManager.RestoreExtendedMode(LogToStatusWindow);
-                        if (!success)
-                        {
-                            LogToStatusWindow("DISPLAY: Failed to restore Extended mode (may require Administrator)");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogToStatusWindow($"DISPLAY: Exception restoring Extended mode - {ex.Message}");
-                    }
+                    // Undock: hand off to the single shared revert path.
+                    RevertAll(RevertReason.Undock, LogDurable);
                 }
             }
             catch (Exception ex)
@@ -1301,6 +1196,18 @@ namespace LADApp
             {
                 // Silently handle errors
             }
+        }
+
+        /// <summary>
+        /// Logs to the dashboard AND to the on-disk session log.
+        /// Used for revert steps: the session log is the forensic record of what was
+        /// restored, which is exactly what you need when a machine misbehaves after
+        /// undocking, and it must survive the app closing.
+        /// </summary>
+        private void LogDurable(string message)
+        {
+            LogToStatusWindow(message);
+            StatusLogWindow.WriteDirectToSessionLog(message);
         }
 
         private void LogToStatusWindow(string message)
@@ -1520,7 +1427,7 @@ namespace LADApp
                         !string.IsNullOrEmpty(appConfig.SelectedMouseInstancePath))
                     {
                         LogToStatusWindow("PERIPHERAL: Enabling wake for selected devices from calibration");
-                        peripheralWakeManager.EnableWakeForKeyboardsAndMice(LogToStatusWindow);
+                        ArmPeripheralWake();
                     }
                 }
             }
@@ -1534,174 +1441,224 @@ namespace LADApp
 
         private void OnQuickEject(object? sender, EventArgs e)
         {
-            // Manually revert to Sleep mode before physical unplugging
-            LogToStatusWindow("Quick Eject: Reverting Lid Close Action to 'Sleep'");
-            bool success = powerManager.SetLidCloseSleep();
-            if (success)
-            {
-                LogToStatusWindow("Quick Eject: Successfully reverted to 'Sleep' mode");
-            }
-            else
-            {
-                LogToStatusWindow("Quick Eject: Failed to revert (may require Administrator)");
-            }
-
-            // Restore original Hibernate Timeout
-            LogToStatusWindow("Quick Eject: Restoring Hibernate Timeout");
-            success = powerManager.RestoreHibernateTimeout();
-            if (success)
-            {
-                uint? restoredValue = powerManager.GetOriginalHibernateTimeout();
-                string restoredValueStr = restoredValue.HasValue ? $"{restoredValue.Value} seconds" : "Unknown";
-                LogToStatusWindow($"Quick Eject: Hibernate Timeout restored to '{restoredValueStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"Quick Eject: Hibernate Timeout restored to '{restoredValueStr}'");
-            }
-            else
-            {
-                LogToStatusWindow("Quick Eject: Failed to restore Hibernate Timeout (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("Quick Eject: FAILED to restore Hibernate Timeout (may require Administrator)");
-            }
-
-            // Restore original power scheme
-            LogToStatusWindow("Quick Eject: Restoring original power scheme");
-            success = powerManager.RestoreOriginalPowerScheme();
-            if (success)
-            {
-                Guid? restoredScheme = powerManager.GetOriginalPowerScheme();
-                string restoredSchemeStr = restoredScheme.HasValue ? restoredScheme.Value.ToString() : "Unknown";
-                LogToStatusWindow($"Quick Eject: Power scheme restored to '{restoredSchemeStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"Quick Eject: Power scheme restored to '{restoredSchemeStr}'");
-            }
-            else
-            {
-                LogToStatusWindow("Quick Eject: Failed to restore power scheme (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("Quick Eject: FAILED to restore power scheme (may require Administrator)");
-            }
-
-            // Restore Extended display topology (restore internal screen)
-            LogToStatusWindow("Quick Eject: Restoring Extended display mode");
-            success = displayManager.RestoreExtendedMode(LogToStatusWindow);
-            if (!success)
-            {
-                LogToStatusWindow("Quick Eject: Failed to restore display mode (may require Administrator)");
-            }
-
-            // Re-enable USB Selective Suspend
-            LogToStatusWindow("Quick Eject: Re-enabling USB Selective Suspend");
-            peripheralWakeManager?.EnableUsbSelectiveSuspend(LogToStatusWindow);
+            // Same revert as undocking - the user is about to unplug. Notably this
+            // includes disarming peripheral wake, which this path used to skip.
+            RevertAll(RevertReason.QuickEject, LogDurable);
         }
 
         private void OnExit(object? sender, EventArgs e)
         {
-            // Revert power settings before exiting
-            LogToStatusWindow("App Exit: Reverting Lid Close Action to 'Sleep'");
-            powerManager?.SetLidCloseSleep();
-            
-            // Restore original Hibernate Timeout
-            LogToStatusWindow("App Exit: Restoring Hibernate Timeout");
-            bool success = powerManager?.RestoreHibernateTimeout() ?? false;
-            if (success)
-            {
-                uint? restoredValue = powerManager?.GetOriginalHibernateTimeout();
-                string restoredValueStr = restoredValue.HasValue ? $"{restoredValue.Value} seconds" : "Unknown";
-                LogToStatusWindow($"App Exit: Hibernate Timeout restored to '{restoredValueStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"App Exit: Hibernate Timeout restored to '{restoredValueStr}'");
-            }
-            else
-            {
-                LogToStatusWindow("App Exit: Failed to restore Hibernate Timeout (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("App Exit: FAILED to restore Hibernate Timeout (may require Administrator)");
-            }
-
-            // Restore original power scheme
-            LogToStatusWindow("App Exit: Restoring original power scheme");
-            success = powerManager?.RestoreOriginalPowerScheme() ?? false;
-            if (success)
-            {
-                Guid? restoredScheme = powerManager?.GetOriginalPowerScheme();
-                string restoredSchemeStr = restoredScheme.HasValue ? restoredScheme.Value.ToString() : "Unknown";
-                LogToStatusWindow($"App Exit: Power scheme restored to '{restoredSchemeStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"App Exit: Power scheme restored to '{restoredSchemeStr}'");
-            }
-            else
-            {
-                LogToStatusWindow("App Exit: Failed to restore power scheme (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("App Exit: FAILED to restore power scheme (may require Administrator)");
-            }
-            
-            // Re-enable USB Selective Suspend (restore default)
-            LogToStatusWindow("App Exit: Re-enabling USB Selective Suspend");
-            peripheralWakeManager?.EnableUsbSelectiveSuspend(LogToStatusWindow);
-            
+            // Application.Exit() triggers OnFormClosing, which performs the revert.
+            // Doing it here as well would run the whole sequence twice.
+            LogToStatusWindow("App Exit: Shutting down");
             Application.Exit();
         }
 
         /// <summary>
-        /// Emergency cleanup method called by crash handler.
-        /// Reverts all system settings to safe defaults.
-        /// This method must be exception-safe (handle all exceptions internally).
+        /// Arms keyboards and mice for wake and records what was armed, so that RevertAll
+        /// can disarm exactly those devices later.
+        ///
+        /// Always arm through this method rather than calling the manager directly - a
+        /// device armed without being recorded can never be disarmed, and will keep waking
+        /// the machine after undocking.
         /// </summary>
-        public void EmergencyRevertAllSettings()
+        /// <returns>The number of devices armed.</returns>
+        private int ArmPeripheralWake()
         {
-            // This method is called during crash handling, so we must be extremely defensive
-            // Each operation is wrapped in try-catch to ensure we attempt all reverts
+            var armed = peripheralWakeManager.EnableWakeForKeyboardsAndMice(LogToStatusWindow);
 
-            // 1. Revert Lid Close Action to Sleep
-            try
+            if (armed.Count > 0)
             {
-                powerManager?.SetLidCloseSleep();
-            }
-            catch { /* Ignore - continue with other reverts */ }
-
-            // 2. Restore Hibernate Timeout
-            try
-            {
-                powerManager?.RestoreHibernateTimeout();
-            }
-            catch { /* Ignore - continue with other reverts */ }
-
-            // 3. Restore original power scheme
-            try
-            {
-                powerManager?.RestoreOriginalPowerScheme();
-            }
-            catch { /* Ignore - continue with other reverts */ }
-
-            // 4. Restore Display Topology to Extended mode
-            try
-            {
-                displayManager?.RestoreExtendedMode(null); // No logging callback during crash
-            }
-            catch { /* Ignore - continue with other reverts */ }
-
-            // 5. Re-enable USB Selective Suspend
-            try
-            {
-                peripheralWakeManager?.EnableUsbSelectiveSuspend(null); // No logging callback during crash
-            }
-            catch { /* Ignore - continue with other reverts */ }
-
-            // 6. Unregister hotkey (if handle is still valid)
-            try
-            {
-                if (this.IsHandleCreated)
+                // Union with anything already armed: a re-arm may see a different set of
+                // devices (one unplugged, another added) and we must not forget the rest.
+                foreach (string identifier in armed.DeviceIdentifiers)
                 {
-                    UnregisterHotKey(this.Handle, HOTKEY_ID_SAFETY_REVERT);
+                    if (!appConfig.ArmedWakeDeviceIds.Contains(identifier))
+                    {
+                        appConfig.ArmedWakeDeviceIds.Add(identifier);
+                    }
                 }
-            }
-            catch { /* Ignore - continue with other reverts */ }
 
-            // 7. Clear power request (no longer needed since we don't set it, but kept for safety)
-            try
-            {
-                SetThreadExecutionState(ES_CONTINUOUS);
+                appConfig.Save();
             }
-            catch { /* Ignore - continue with other reverts */ }
+
+            return armed.Count;
         }
 
-        protected override void OnFormClosing(FormClosingEventArgs e)
+        /// <summary>
+        /// Why a revert is happening. Only affects logging and whether the revert is
+        /// allowed to run more than once - the set of settings restored is always the same.
+        /// </summary>
+        private enum RevertReason
         {
-            // Unregister hotkey
+            /// <summary>Laptop was undocked; app keeps running.</summary>
+            Undock,
+
+            /// <summary>User asked to prepare for unplugging; app keeps running.</summary>
+            QuickEject,
+
+            /// <summary>User chose Exit, or the form is closing.</summary>
+            Shutdown,
+
+            /// <summary>Unhandled exception; no logging, maximum defensiveness.</summary>
+            Crash,
+
+            /// <summary>Previous session died without reverting; cleaning up at startup.</summary>
+            StartupRecovery
+        }
+
+        /// <summary>
+        /// Set once a shutdown revert has completed, so the Exit menu item and
+        /// OnFormClosing cannot run the whole sequence twice.
+        /// </summary>
+        private bool shutdownRevertCompleted = false;
+
+        /// <summary>
+        /// THE single place that undoes everything this app changes on the system.
+        ///
+        /// Every exit path - undock, user exit, form close, crash, startup recovery -
+        /// goes through here. Previously each path had its own copy of the sequence and
+        /// they had drifted: only the crash path restored display topology, so a normal
+        /// exit left the machine in External-Only mode. Keep it that way: if you add a
+        /// system change, add its undo here and nowhere else.
+        ///
+        /// Every step is individually wrapped because this runs during crash handling,
+        /// where one failing step must not prevent the rest.
+        /// </summary>
+        /// <param name="reason">Why we are reverting.</param>
+        /// <param name="log">Logger, or null to stay silent (crash path).</param>
+        private void RevertAll(RevertReason reason, Action<string>? log)
+        {
+            bool isShutdownPath = reason == RevertReason.Shutdown || reason == RevertReason.Crash;
+
+            if (isShutdownPath && shutdownRevertCompleted)
+            {
+                return;
+            }
+
+            log?.Invoke($"REVERT ({reason}): Restoring system defaults");
+
+            // 1. Lid Close Action -> Sleep. The most safety-critical setting: leaving it
+            //    at "Do Nothing" means a closed, undocked laptop cooks in a bag.
+            try
+            {
+                bool ok = powerManager?.SetLidCloseSleep() ?? false;
+                log?.Invoke(ok
+                    ? "REVERT: Lid Close Action restored to 'Sleep'"
+                    : "REVERT: FAILED to restore Lid Close Action (may require Administrator)");
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION restoring Lid Close Action - {ex.Message}"); }
+
+            // 2. Hibernate timeout -> original value
+            try
+            {
+                bool ok = powerManager?.RestoreHibernateTimeout() ?? false;
+                uint? restored = powerManager?.GetOriginalHibernateTimeout();
+                log?.Invoke(ok
+                    ? $"REVERT: Hibernate Timeout restored to '{(restored.HasValue ? restored.Value + " seconds" : "Unknown")}'"
+                    : "REVERT: FAILED to restore Hibernate Timeout (may require Administrator or setting unavailable)");
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION restoring Hibernate Timeout - {ex.Message}"); }
+
+            // 3. Power scheme -> original (restores manufacturer custom schemes)
+            try
+            {
+                bool ok = powerManager?.RestoreOriginalPowerScheme() ?? false;
+                Guid? restored = powerManager?.GetOriginalPowerScheme();
+                log?.Invoke(ok
+                    ? $"REVERT: Power scheme restored to '{(restored.HasValue ? restored.Value.ToString() : "Unknown")}'"
+                    : "REVERT: FAILED to restore power scheme (may require Administrator)");
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION restoring power scheme - {ex.Message}"); }
+
+            // 4. Battery charge limit -> 100%
+            if (appConfig?.BatteryHealthGuardEnabled == true)
+            {
+                try
+                {
+                    if (batteryHealthManager?.IsWmiSupportAvailable() == true)
+                    {
+                        bool ok = batteryHealthManager.DisableChargeLimit();
+                        log?.Invoke(ok
+                            ? "REVERT: Battery charge limit disabled - restored to 100%"
+                            : "REVERT: FAILED to disable battery charge limit (may require Administrator)");
+                    }
+                    else
+                    {
+                        log?.Invoke("REVERT: Battery charge limit must be restored manually in the manufacturer app");
+                    }
+                }
+                catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION disabling battery charge limit - {ex.Message}"); }
+            }
+
+            // 5. Disarm peripheral wake. Without this an undocked laptop stays wakeable
+            //    by a bumped Bluetooth mouse - the one change that follows the machine
+            //    out of the house.
+            try
+            {
+                var armed = appConfig?.ArmedWakeDeviceIds;
+                if (armed != null && armed.Count > 0)
+                {
+                    int disarmed = peripheralWakeManager?.DisableWakeForDevices(armed, log) ?? 0;
+                    log?.Invoke($"REVERT: Disarmed wake for {disarmed} of {armed.Count} device(s)");
+
+                    if (appConfig != null)
+                    {
+                        appConfig.ArmedWakeDeviceIds = new List<string>();
+                    }
+                }
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION disarming peripheral wake - {ex.Message}"); }
+
+            // 6. USB Selective Suspend -> re-enabled (system default)
+            try
+            {
+                bool ok = peripheralWakeManager?.EnableUsbSelectiveSuspend(log) ?? false;
+                if (!ok)
+                {
+                    log?.Invoke("REVERT: FAILED to re-enable USB Selective Suspend (may require Administrator)");
+                }
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION re-enabling USB Selective Suspend - {ex.Message}"); }
+
+            // 7. Display topology -> Extended (brings the internal panel back)
+            try
+            {
+                bool ok = displayManager?.RestoreExtendedMode(log) ?? false;
+                if (!ok)
+                {
+                    log?.Invoke("REVERT: FAILED to restore Extended display mode (may require Administrator)");
+                }
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION restoring Extended display mode - {ex.Message}"); }
+
+            // 8. Clear the dirty flag last, so it only drops once the reverts above have
+            //    actually been attempted. If we die partway through, the flag survives and
+            //    the next launch retries.
+            try
+            {
+                if (appConfig != null)
+                {
+                    appConfig.PolicyActive = false;
+                    appConfig.Save();
+                }
+            }
+            catch (Exception ex) { log?.Invoke($"REVERT: EXCEPTION clearing active-policy flag - {ex.Message}"); }
+
+            if (isShutdownPath)
+            {
+                shutdownRevertCompleted = true;
+            }
+
+            log?.Invoke($"REVERT ({reason}): Complete");
+        }
+
+        /// <summary>
+        /// Releases app-lifetime OS resources (global hotkey, execution state).
+        /// Separate from RevertAll, which deals only with persistent system settings.
+        /// </summary>
+        private void ReleaseOsResources()
+        {
             try
             {
                 if (this.IsHandleCreated)
@@ -1711,48 +1668,28 @@ namespace LADApp
             }
             catch { /* Ignore */ }
 
-            // Clear power request (no longer needed since we don't set it, but kept for safety)
-            SetThreadExecutionState(ES_CONTINUOUS);
-
-            // Revert power settings before closing
-            LogToStatusWindow("App Closing: Reverting Lid Close Action to 'Sleep'");
-            powerManager?.SetLidCloseSleep();
-
-            // Restore original Hibernate Timeout
-            LogToStatusWindow("App Closing: Restoring Hibernate Timeout");
-            bool success = powerManager?.RestoreHibernateTimeout() ?? false;
-            if (success)
+            try
             {
-                uint? restoredValue = powerManager?.GetOriginalHibernateTimeout();
-                string restoredValueStr = restoredValue.HasValue ? $"{restoredValue.Value} seconds" : "Unknown";
-                LogToStatusWindow($"App Closing: Hibernate Timeout restored to '{restoredValueStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"App Closing: Hibernate Timeout restored to '{restoredValueStr}'");
+                SetThreadExecutionState(ES_CONTINUOUS);
             }
-            else
-            {
-                LogToStatusWindow("App Closing: Failed to restore Hibernate Timeout (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("App Closing: FAILED to restore Hibernate Timeout (may require Administrator)");
-            }
+            catch { /* Ignore */ }
+        }
 
-            // Restore original power scheme
-            LogToStatusWindow("App Closing: Restoring original power scheme");
-            success = powerManager?.RestoreOriginalPowerScheme() ?? false;
-            if (success)
-            {
-                Guid? restoredScheme = powerManager?.GetOriginalPowerScheme();
-                string restoredSchemeStr = restoredScheme.HasValue ? restoredScheme.Value.ToString() : "Unknown";
-                LogToStatusWindow($"App Closing: Power scheme restored to '{restoredSchemeStr}'");
-                StatusLogWindow.WriteDirectToSessionLog($"App Closing: Power scheme restored to '{restoredSchemeStr}'");
-            }
-            else
-            {
-                LogToStatusWindow("App Closing: Failed to restore power scheme (may require Administrator)");
-                StatusLogWindow.WriteDirectToSessionLog("App Closing: FAILED to restore power scheme (may require Administrator)");
-            }
+        /// <summary>
+        /// Emergency cleanup method called by the crash handler.
+        /// Delegates to the shared revert path with logging disabled.
+        /// </summary>
+        public void EmergencyRevertAllSettings()
+        {
+            RevertAll(RevertReason.Crash, null);
+            ReleaseOsResources();
+        }
 
-            // Re-enable USB Selective Suspend (restore default)
-            LogToStatusWindow("App Closing: Re-enabling USB Selective Suspend");
-            peripheralWakeManager?.EnableUsbSelectiveSuspend(LogToStatusWindow);
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Every setting this app changed is undone in one place; see RevertAll.
+            RevertAll(RevertReason.Shutdown, LogDurable);
+            ReleaseOsResources();
 
             // Clean up timers
             detectionTimer?.Stop();

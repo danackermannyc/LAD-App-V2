@@ -358,7 +358,18 @@ namespace LADApp
                     // Enable wake for selected devices
                     // Note: We'll use the existing method which enables all devices
                     // In a future enhancement, we could enable only selected devices
-                    peripheralWakeManager.EnableWakeForKeyboardsAndMice(null);
+                    var armed = peripheralWakeManager.EnableWakeForKeyboardsAndMice(null);
+
+                    // Record what we armed so the app can disarm it later. Without this,
+                    // devices armed by the wake test would stay wake-enabled forever.
+                    foreach (string identifier in armed.DeviceIdentifiers)
+                    {
+                        if (!appConfig.ArmedWakeDeviceIds.Contains(identifier))
+                        {
+                            appConfig.ArmedWakeDeviceIds.Add(identifier);
+                        }
+                    }
+                    appConfig.Save();
 
                     wakeTestStatusLabel.Text = "Enabling wake for devices...";
                     wakeTestStatusLabel.ForeColor = Color.Blue;

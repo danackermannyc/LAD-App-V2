@@ -86,6 +86,22 @@ namespace LADApp
                     displayManager.RestoreExtendedMode(null); // No logging during crash
                 }
                 catch { /* Ignore - continue with other reverts */ }
+
+                // Disarm any devices we armed for wake. Read straight from config so this
+                // works even when MainForm never existed, and so an undocked machine is
+                // not left wakeable by a peripheral.
+                try
+                {
+                    AppConfig config = AppConfig.Load();
+                    if (config.ArmedWakeDeviceIds.Count > 0)
+                    {
+                        PeripheralWakeManager wakeManager = new PeripheralWakeManager();
+                        wakeManager.DisableWakeForDevices(config.ArmedWakeDeviceIds, null);
+                        config.ArmedWakeDeviceIds.Clear();
+                        config.Save();
+                    }
+                }
+                catch { /* Ignore - continue with other reverts */ }
             }
             catch
             {
@@ -134,7 +150,7 @@ namespace LADApp
                 {
                     MessageBox.Show(
                         "LAD App has encountered an error. System defaults have been restored for safety.\n\n" +
-                        "A crash log has been saved to crash_log.txt in the application folder.",
+                        $"A crash log has been saved to:\n{Path.Combine(AppConfig.AppDataDirectory, "crash_log.txt")}",
                         "LAD App - Critical Error",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
@@ -152,7 +168,7 @@ namespace LADApp
                     string minimalLog = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] CRITICAL: Crash handler itself failed!\n" +
                                        $"Crash Type: {crashType}\n" +
                                        $"Exception: {exception?.Message ?? "Unknown"}\n";
-                    File.AppendAllText("crash_log.txt", minimalLog);
+                    File.AppendAllText(Path.Combine(AppConfig.AppDataDirectory, "crash_log.txt"), minimalLog);
                 }
                 catch
                 {
@@ -168,7 +184,11 @@ namespace LADApp
         {
             try
             {
-                string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash_log.txt");
+                // Write beside config.json in LocalAppData. The install directory is
+                // read-only under Program Files and MSIX, which would silently discard
+                // the log exactly when it matters.
+                Directory.CreateDirectory(AppConfig.AppDataDirectory);
+                string logPath = Path.Combine(AppConfig.AppDataDirectory, "crash_log.txt");
                 string separator = new string('=', 80);
                 string logEntry = $"\n{separator}\n" +
                                  $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] CRASH DETECTED\n" +
