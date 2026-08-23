@@ -99,3 +99,7 @@ desktop.ini
 
 # Cursor AI
 .cursor/
+
+# Release archives - publish these as GitHub Release assets, never commit them
+*.zip
+*.msix
