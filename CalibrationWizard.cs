@@ -383,15 +383,45 @@ namespace LADApp
 
                     System.Threading.Thread.Sleep(3000);
 
-                    // Use SetSuspendState to put system to sleep
-                    Application.SetSuspendState(PowerState.Suspend, true, true);
+                    // Put the system to sleep WITH wake events left enabled.
+                    //
+                    // The third argument is disableWakeEvent. It used to be passed as
+                    // true, which asks Windows to disable all wake events for this
+                    // suspend - so the wake test could never be woken by a keyboard or
+                    // mouse, no matter how correctly the devices were armed. It must be
+                    // false for the test to mean anything.
+                    //
+                    // (The second argument, force, has no effect on Vista and later.)
+                    Application.SetSuspendState(PowerState.Suspend, true, false);
 
-                    // If we get here, the system was woken
-                    wakeTestCompleted = true;
-                    wakeTestStatusLabel.Text = "✓ Wake test completed successfully!\n" +
-                                              "The system was woken using your keyboard or mouse.";
-                    wakeTestStatusLabel.ForeColor = Color.Green;
-                    testWakeButton.Enabled = false;
+                    // SetSuspendState returns once the system resumes, but it cannot tell
+                    // us WHY it resumed - a power button press looks identical to a
+                    // keyboard wake from here. This used to claim outright that the
+                    // peripherals had woken the machine, which made a failed test report
+                    // itself as passed. Ask the user instead.
+                    DialogResult wokeByPeripheral = MessageBox.Show(
+                        "The system has resumed.\n\n" +
+                        "Did you wake it using your external keyboard or mouse?\n\n" +
+                        "Choose No if you had to use the power button or open the lid.",
+                        "Wake Test Result",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (wokeByPeripheral == DialogResult.Yes)
+                    {
+                        wakeTestCompleted = true;
+                        wakeTestStatusLabel.Text = "✓ Wake test passed.\n" +
+                                                  "The system was woken using your keyboard or mouse.";
+                        wakeTestStatusLabel.ForeColor = Color.Green;
+                        testWakeButton.Enabled = false;
+                    }
+                    else
+                    {
+                        wakeTestCompleted = false;
+                        wakeTestStatusLabel.Text = "✗ Wake test failed - the peripherals did not wake the system.\n" +
+                                                  "You can retry the test.";
+                        wakeTestStatusLabel.ForeColor = Color.Red;
+                    }
                 }
                 catch (Exception ex)
                 {
